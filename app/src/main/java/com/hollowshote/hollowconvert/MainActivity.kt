@@ -65,14 +65,13 @@ fun HollowToolboxApp() {
     val context = LocalContext.current
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var sourceName by remember { mutableStateOf("No file selected") }
+    var sourceMime by remember { mutableStateOf<String?>(null) }
     var outputText by remember { mutableStateOf("") }
     var outputBytes by remember { mutableStateOf<ByteArray?>(null) }
     var outputExtension by remember { mutableStateOf("txt") }
     var outputMime by remember { mutableStateOf("text/plain") }
     var status by remember { mutableStateOf("Choose a file to get started.") }
     var selectedTool by remember { mutableStateOf("Text & documents") }
-    var sourceFormat by remember { mutableStateOf("Auto detect") }
-    var selectedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var zipAction by remember { mutableStateOf("Create ZIP") }
     var pendingZipUri by remember { mutableStateOf<Uri?>(null) }
     var isBusy by remember { mutableStateOf(false) }
@@ -85,20 +84,20 @@ fun HollowToolboxApp() {
         if (uri != null) {
             sourceUri = uri
             sourceName = queryDisplayName(context, uri)
-            sourceFormat = sourceName.substringAfterLast('.', "").uppercase().ifBlank { "Auto detect" }
+            sourceMime = context.contentResolver.getType(uri)
+            val detected = detectFileType(sourceName, sourceMime)
+            selectedTool = when (detected) {
+                "Image" -> "Images"
+                "ZIP archive" -> "Archives"
+                "Text document" -> "Text & documents"
+                "Audio" -> "Audio"
+                "Video" -> "Video"
+                else -> "Other"
+            }
+            zipAction = if (detected == "ZIP archive") "Extract ZIP" else "Create ZIP"
             outputText = ""
             outputBytes = null
             status = "File ready. Choose a conversion."
-        }
-    }
-    val openMultipleFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) {
-            selectedUris = uris
-            sourceUri = uris.first()
-            sourceName = if (uris.size == 1) queryDisplayName(context, uris.first()) else uris.size.toString() + " files selected"
-            outputText = ""
-            outputBytes = null
-            status = "Files ready to archive."
         }
     }
 
@@ -203,7 +202,7 @@ fun HollowToolboxApp() {
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("CONVERT FILES", fontWeight = FontWeight.Black, fontSize = 21.sp)
-                            Text("Choose a file, select its format, then choose what to convert it to.", color = Muted, fontSize = 12.sp)
+                            Text("Choose a file. Hollow Toolbox detects its type and shows the formats it can convert to.", color = Muted, fontSize = 12.sp)
 
                             var format by remember(selectedTool) {
                                 mutableStateOf(
