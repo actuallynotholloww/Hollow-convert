@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Base64
 import java.io.ByteArrayOutputStream
 import androidx.activity.ComponentActivity
@@ -16,7 +17,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.documentfile.provider.DocumentFile
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -63,6 +71,10 @@ fun HollowToolboxApp() {
     var outputMime by remember { mutableStateOf("text/plain") }
     var status by remember { mutableStateOf("Choose a file to get started.") }
     var selectedTool by remember { mutableStateOf("Text & documents") }
+    var selectedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var zipAction by remember { mutableStateOf("Create ZIP") }
+    var pendingZipUri by remember { mutableStateOf<Uri?>(null) }
+    var isBusy by remember { mutableStateOf(false) }
     var plannedTool by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -76,6 +88,34 @@ fun HollowToolboxApp() {
             status = "File ready. Choose a conversion."
         }
     }
+    val openMultipleFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            selectedUris = uris
+            sourceUri = uris.first()
+            sourceName = if (uris.size == 1) queryDisplayName(context, uris.first()) else uris.size.toString() + " files selected"
+            outputText = ""
+            outputBytes = null
+            status = "Files ready to archive."
+        }
+    }
+
+    val chooseZipFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { folderUri ->
+        val zipUri = pendingZipUri
+        if (folderUri != null && zipUri != null) {
+            scope.launch {
+                isBusy = true
+                status = "Extracting ZIP archive..."
+                val result = runCatching { withContext(Dispatchers.IO) { extractZipSafely(context, zipUri, folderUri) } }
+                status = result.fold(
+                    { "Extracted " + it.toString() + " file(s)." },
+                    { "Extraction failed: " + (it.message ?: "Unknown error") }
+                )
+                isBusy = false
+                pendingZipUri = null
+            }
+        }
+    }
+
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         if (uri != null && (outputBytes != null || outputText.isNotEmpty())) {
             runCatching {
@@ -172,13 +212,50 @@ fun HollowToolboxApp() {
                             Text(if (selectedTool == "Images") "Convert an image between supported formats on your device." else "Choose a supported output format. Text conversions run on your device.", color = Muted, fontSize = 12.sp)
                             var format by remember(selectedTool) { mutableStateOf(if (selectedTool == "Images") "PNG" else "TXT") }
                             val formats = if (selectedTool == "Images") listOf("PNG", "JPG", "WEBP") else listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE")
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (selectedTool != "Archives") Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 formats.forEach { option ->
                                     FilterChip(selected = format == option, onClick = { format = option }, label = { Text(option) })
                                 }
                             }
+                            if (selectedTool == "Archives") {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(selected = zipAction == "Create ZIP", onClick = { zipAction = "Create ZIP" }, label = { Text("Create ZIP") })
+                                    FilterChip(selected = zipAction == "Extract ZIP", onClick = { zipAction = "Extract ZIP" }, label = { Text("Extract ZIP") })
+                                }
+                                Text(
+                                    if (zipAction == "Create ZIP") "Bundle several selected files into one compressed archive."
+                                    else "Choose a ZIP file, then select its destination folder.",
+                                    color = Muted,
+                                    fontSize = 11.sp
+                                )
+                            }
+
                             Button(
                                 onClick = {
+                                    if (selectedTool == "Archives") {
+                                        if (zipAction == "Create ZIP") {
+                                            if (selectedUris.isEmpty()) {
+                                                openMultipleFiles.launch(arrayOf("*/*"))
+                                            } else {
+                                                scope.launch {
+                                                    isBusy = true
+                                                    val result = runCatching { withContext(Dispatchers.IO) { createZip(context, selectedUris) } }
+                                                    result.onSuccess {
+                                                        outputBytes = it
+                                                        outputText = ""
+                                                        outputExtension = "zip"
+                                                        status = "ZIP archive ready. Save it below."
+                                                    }.onFailure { status = "ZIP failed: " + (it.message ?: "Unknown error") }
+                                                    isBusy = false
+                                                }
+                                            }
+                                        } else if (sourceUri == null) {
+                                            status = "Select a ZIP file first."
+                                        } else {
+                                            pendingZipUri = sourceUri
+                                            chooseZipFolder.launch(null)
+                                        }
+                                    } else {
                                     val uri = sourceUri
                                     if (uri == null) {
                                         status = "Select a file first."
@@ -215,11 +292,13 @@ fun HollowToolboxApp() {
                                             status = "Conversion ready. Save your result below."
                                         }.onFailure { status = "Conversion failed: ${it.message}" }
                                     }
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
+                                enabled = !isBusy,
                                 colors = ButtonDefaults.buttonColors(containerColor = Accent)
                             ) {
-                                Text("Convert file")
+                                Text(if (selectedTool == "Archives") if (zipAction == "Create ZIP") "Create archive" else "Extract archive" else if (selectedTool == "Images") "Convert image" else "Convert file")
                                 Spacer(Modifier.width(8.dp))
                                 Icon(Icons.Default.ArrowForward, null)
                             }
@@ -233,8 +312,9 @@ fun HollowToolboxApp() {
                     }
                 }
                 item {
-                    Text(status, color = Muted, fontSize = 12.sp)
-                    Text("More formats will be added in future builds. Some formats require dedicated conversion engines.", color = Muted, fontSize = 11.sp)
+                    if (isBusy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Accent)
+                    Text(status, color = Muted, fontSize = 11.sp)
+                    Text("Audio/video transcoding and specialist 3D or game-asset conversion need additional engines and are not included yet.", color = Muted, fontSize = 10.sp)
                 }
             }
         }
@@ -278,6 +358,89 @@ private fun RowScope.HomeToolTile(
             Text(subtitle, color = Muted, fontSize = 8.sp, maxLines = 1)
         }
     }
+}
+
+private fun queryDisplayName(context: android.content.Context, uri: Uri): String {
+    var name = uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0) name = cursor.getString(index) ?: name
+        }
+    }
+    return name
+}
+
+private fun createZip(context: android.content.Context, uris: List<Uri>): ByteArray {
+    require(uris.size <= 100) { "Select 100 files or fewer." }
+    val result = ByteArrayOutputStream()
+    var total = 0L
+    val used = mutableSetOf<String>()
+    ZipOutputStream(result).use { zip ->
+        uris.forEachIndexed { index, uri ->
+            val original = queryDisplayName(context, uri).replace("/", "_")
+            var name = original.ifBlank { "file_" + (index + 1) }
+            var counter = 2
+            while (!used.add(name.lowercase())) {
+                val dot = original.lastIndexOf('.')
+                name = if (dot > 0) original.substring(0, dot) + "_" + counter + original.substring(dot) else original + "_" + counter
+                counter++
+            }
+            zip.putNextEntry(ZipEntry(name))
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    require(total <= 64L * 1024L * 1024L) { "Selected files exceed the 64 MB ZIP limit." }
+                    zip.write(buffer, 0, count)
+                }
+            } ?: error("Could not read " + original)
+            zip.closeEntry()
+        }
+    }
+    return result.toByteArray()
+}
+
+private fun extractZipSafely(context: android.content.Context, zipUri: Uri, folderUri: Uri): Int {
+    val root = DocumentFile.fromTreeUri(context, folderUri) ?: error("Destination folder is unavailable.")
+    var extracted = 0
+    var total = 0L
+    val input = context.contentResolver.openInputStream(zipUri) ?: error("Could not open the ZIP file.")
+    ZipInputStream(input).use { zip ->
+        while (true) {
+            val entry = zip.nextEntry ?: break
+            val path = entry.name
+            val parts = path.split('/').filter { it.isNotEmpty() }
+            require(!path.startsWith("/") && parts.none { it == "." || it == ".." }) { "Archive contains an unsafe path." }
+            require(extracted < 1000) { "Archive exceeds the 1,000-file limit." }
+            if (parts.isNotEmpty()) {
+                var parent = root
+                for (folder in parts.dropLast(1)) {
+                    parent = parent.findFile(folder) ?: parent.createDirectory(folder) ?: error("Could not create folder.")
+                }
+                if (entry.isDirectory) {
+                    if (parent.findFile(parts.last()) == null) parent.createDirectory(parts.last())
+                } else {
+                    val file = parent.createFile("application/octet-stream", parts.last()) ?: error("Could not create extracted file.")
+                    context.contentResolver.openOutputStream(file.uri)?.use { output ->
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val count = zip.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= 256L * 1024L * 1024L) { "Extracted data exceeds the 256 MB safety limit." }
+                            output.write(buffer, 0, count)
+                        }
+                    } ?: error("Could not write extracted file.")
+                    extracted++
+                }
+            }
+            zip.closeEntry()
+        }
+    }
+    return extracted
 }
 
 private fun convertText(input: String, output: String): String = when (output) {
