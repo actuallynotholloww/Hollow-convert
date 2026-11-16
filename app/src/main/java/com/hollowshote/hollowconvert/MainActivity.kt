@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
@@ -46,13 +47,13 @@ private val Muted = Color(0xFF9AA2B5)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { HollowConvertApp() }
+        setContent { HollowToolboxApp() }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HollowConvertApp() {
+fun HollowToolboxApp() {
     val context = LocalContext.current
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var sourceName by remember { mutableStateOf("No file selected") }
@@ -95,7 +96,7 @@ fun HollowConvertApp() {
             TopAppBar(
                 title = {
                     Column {
-                        Text("HOLLOW CONVERT", fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+                        Text("HOLLOW TOOLBOX", fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
                         Text("YOUR FILES. YOUR FORMAT.", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
                     }
                 },
@@ -147,18 +148,20 @@ fun HollowConvertApp() {
                 item {
                     Text("CONVERSION TOOLS", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ToolRow("Text & documents", "TXT, HTML, JSON, Markdown", Icons.Default.Description) {
-                            selectedTool = "Text & documents"
-                            status = "Text & document tools selected."
-                            scope.launch { listState.animateScrollToItem(3) }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            HomeToolTile("CONVERT", "Text & docs", Icons.Default.Description, selectedTool == "Text & documents") {
+                                selectedTool = "Text & documents"
+                                status = "Text conversion selected."
+                            }
+                            HomeToolTile("IMAGES", "PNG · JPG · WebP", Icons.Default.Image, selectedTool == "Images") {
+                                selectedTool = "Images"
+                                status = "Image conversion selected."
+                            }
+                            HomeToolTile("ARCHIVES", "ZIP tools", Icons.Default.Folder, selectedTool == "Archives") {
+                                selectedTool = "Archives"
+                                status = "Archive tools selected."
+                            }
                         }
-                        ToolRow("Images", "PNG, JPG, WebP — convert images", Icons.Default.Image) {
-                            selectedTool = "Images"
-                            status = "Image tools selected."
-                            scope.launch { listState.animateScrollToItem(3) }
-                        }
-                        ToolRow("Audio", "MP3, WAV, AAC — FFmpeg module planned", Icons.Default.MusicNote) { plannedTool = "Audio" }
-                        ToolRow("Video", "MP4, MOV, WebM — FFmpeg module planned", Icons.Default.VideoLibrary) { plannedTool = "Video" }
                     }
                 }
                 item {
@@ -255,16 +258,24 @@ fun HollowConvertApp() {
 }
 
 @Composable
-private fun ToolRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
-        Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = Accent)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.SemiBold)
-                Text(subtitle, color = Muted, fontSize = 11.sp)
-            }
-            Icon(Icons.Default.ArrowForward, null, tint = Muted)
+private fun RowScope.HomeToolTile(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.weight(1f).height(106.dp),
+        colors = CardDefaults.cardColors(containerColor = if (selected) Color(0xFF272344) else Panel),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) Accent else Color(0xFF34394B)),
+        shape = RoundedCornerShape(13.dp)
+    ) {
+        Column(Modifier.fillMaxSize().padding(7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(icon, null, tint = Accent, modifier = Modifier.size(22.dp))
+            Text(title, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.4.sp)
+            Text(subtitle, color = Muted, fontSize = 8.sp, maxLines = 1)
         }
     }
 }
