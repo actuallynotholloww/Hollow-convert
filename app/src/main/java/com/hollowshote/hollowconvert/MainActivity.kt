@@ -72,7 +72,6 @@ fun HollowToolboxApp() {
     var outputMime by remember { mutableStateOf("text/plain") }
     var status by remember { mutableStateOf("Choose a file to get started.") }
     var selectedTool by remember { mutableStateOf("Text & documents") }
-    var zipAction by remember { mutableStateOf("Create ZIP") }
     var pendingZipUri by remember { mutableStateOf<Uri?>(null) }
     var isBusy by remember { mutableStateOf(false) }
     var showConverter by remember { mutableStateOf(false) }
@@ -94,7 +93,6 @@ fun HollowToolboxApp() {
                 "Video" -> "Video"
                 else -> "Other"
             }
-            zipAction = if (detected == "ZIP archive") "Extract ZIP" else "Create ZIP"
             outputText = ""
             outputBytes = null
             status = "File ready. Choose a conversion."
@@ -205,7 +203,7 @@ fun HollowToolboxApp() {
                             Text("CONVERT FILES", fontWeight = FontWeight.Black, fontSize = 21.sp)
                             Text("Choose a file. Hollow Toolbox detects its type and shows the formats it can convert to.", color = Muted, fontSize = 12.sp)
 
-                            var format by remember(selectedTool, sourceName) {
+                            var format by remember(selectedTool, sourceName, sourceUri) {
                                 mutableStateOf(defaultOutputFormat(selectedTool, sourceName))
                             }
                             val fileExtension = sourceName.substringAfterLast('.', "").lowercase()
