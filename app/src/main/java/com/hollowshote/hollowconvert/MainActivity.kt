@@ -1,8 +1,11 @@
 package com.hollowshote.hollowconvert
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.util.Base64
+import java.io.ByteArrayOutputStream
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -54,6 +57,9 @@ fun HollowConvertApp() {
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var sourceName by remember { mutableStateOf("No file selected") }
     var outputText by remember { mutableStateOf("") }
+    var outputBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var outputExtension by remember { mutableStateOf("txt") }
+    var outputMime by remember { mutableStateOf("text/plain") }
     var status by remember { mutableStateOf("Choose a file to get started.") }
     var selectedTool by remember { mutableStateOf("Text & documents") }
     var plannedTool by remember { mutableStateOf<String?>(null) }
@@ -65,13 +71,17 @@ fun HollowConvertApp() {
             sourceUri = uri
             sourceName = uri.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
             outputText = ""
+            outputBytes = null
             status = "File ready. Choose a conversion."
         }
     }
-    val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
-        if (uri != null && outputText.isNotEmpty()) {
+    val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
+        if (uri != null && (outputBytes != null || outputText.isNotEmpty())) {
             runCatching {
-                context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(outputText) }
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    val bytes = outputBytes ?: outputText.toByteArray(Charsets.UTF_8)
+                    stream.write(bytes)
+                } ?: error("Unable to create the output file.")
             }.onSuccess { status = "Export complete." }
              .onFailure { status = "Could not save: ${it.message}" }
         }
@@ -142,7 +152,11 @@ fun HollowConvertApp() {
                             status = "Text & document tools selected."
                             scope.launch { listState.animateScrollToItem(3) }
                         }
-                        ToolRow("Images", "PNG, JPG, WebP — coming next", Icons.Default.Image) { plannedTool = "Images" }
+                        ToolRow("Images", "PNG, JPG, WebP — convert images", Icons.Default.Image) {
+                            selectedTool = "Images"
+                            status = "Image tools selected."
+                            scope.launch { listState.animateScrollToItem(3) }
+                        }
                         ToolRow("Audio", "MP3, WAV, AAC — FFmpeg module planned", Icons.Default.MusicNote) { plannedTool = "Audio" }
                         ToolRow("Video", "MP4, MOV, WebM — FFmpeg module planned", Icons.Default.VideoLibrary) { plannedTool = "Video" }
                     }
@@ -152,10 +166,11 @@ fun HollowConvertApp() {
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (selectedTool == "Text & documents") "Text & document conversions" else "$selectedTool conversions", fontWeight = FontWeight.Bold)
-                            Text("Choose a supported output format. The first build includes working text conversions.", color = Muted, fontSize = 12.sp)
-                            var format by remember { mutableStateOf("TXT") }
+                            Text(if (selectedTool == "Images") "Convert an image between supported formats on your device." else "Choose a supported output format. Text conversions run on your device.", color = Muted, fontSize = 12.sp)
+                            var format by remember(selectedTool) { mutableStateOf(if (selectedTool == "Images") "PNG" else "TXT") }
+                            val formats = if (selectedTool == "Images") listOf("PNG", "JPG", "WEBP") else listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE")
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE").forEach { option ->
+                                formats.forEach { option ->
                                     FilterChip(selected = format == option, onClick = { format = option }, label = { Text(option) })
                                 }
                             }
@@ -166,9 +181,34 @@ fun HollowConvertApp() {
                                         status = "Select a file first."
                                     } else {
                                         runCatching {
-                                            val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                                                ?: error("Unable to read this file.")
-                                            outputText = convertText(raw, format)
+                                            if (selectedTool == "Images") {
+                                                val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+                                                    ?: error("This file could not be decoded as an image.")
+                                                val stream = ByteArrayOutputStream()
+                                                val imageFormat = when (format) {
+                                                    "JPG" -> Bitmap.CompressFormat.JPEG
+                                                    "WEBP" -> Bitmap.CompressFormat.WEBP
+                                                    else -> Bitmap.CompressFormat.PNG
+                                                }
+                                                val mime = when (format) {
+                                                    "JPG" -> "image/jpeg"
+                                                    "WEBP" -> "image/webp"
+                                                    else -> "image/png"
+                                                }
+                                                check(bitmap.compress(imageFormat, 92, stream)) { "Image conversion failed." }
+                                                outputBytes = stream.toByteArray()
+                                                outputText = ""
+                                                outputExtension = format.lowercase()
+                                                outputMime = mime
+                                                bitmap.recycle()
+                                            } else {
+                                                val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                                                    ?: error("Unable to read this file.")
+                                                outputText = convertText(raw, format)
+                                                outputBytes = null
+                                                outputExtension = format.lowercase().replace(" ", "-")
+                                                outputMime = "text/plain"
+                                            }
                                             status = "Conversion ready. Save your result below."
                                         }.onFailure { status = "Conversion failed: ${it.message}" }
                                     }
@@ -180,9 +220,9 @@ fun HollowConvertApp() {
                                 Spacer(Modifier.width(8.dp))
                                 Icon(Icons.Default.ArrowForward, null)
                             }
-                            if (outputText.isNotEmpty()) {
+                            if (outputText.isNotEmpty() || outputBytes != null) {
                                 Text(status, color = Color(0xFF5DD6A0), fontSize = 12.sp)
-                                OutlinedButton(onClick = { saveFile.launch("hollow-convert-output.${format.lowercase()}") }, modifier = Modifier.fillMaxWidth()) {
+                                OutlinedButton(onClick = { saveFile.launch("hollow-convert-output.$outputExtension") }, modifier = Modifier.fillMaxWidth()) {
                                     Text("Save converted file")
                                 }
                             }
