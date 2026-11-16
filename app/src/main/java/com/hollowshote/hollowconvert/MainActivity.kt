@@ -205,24 +205,6 @@ fun HollowToolboxApp() {
                             Text("CONVERT FILES", fontWeight = FontWeight.Black, fontSize = 21.sp)
                             Text("Choose a file, select its format, then choose what to convert it to.", color = Muted, fontSize = 12.sp)
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                FilterChip(
-                                    selected = selectedTool == "Text & documents",
-                                    onClick = { selectedTool = "Text & documents"; sourceFormat = "Auto detect"; outputText = ""; outputBytes = null },
-                                    label = { Text("Text") }
-                                )
-                                FilterChip(
-                                    selected = selectedTool == "Images",
-                                    onClick = { selectedTool = "Images"; sourceFormat = "Auto detect"; outputText = ""; outputBytes = null },
-                                    label = { Text("Images") }
-                                )
-                                FilterChip(
-                                    selected = selectedTool == "Archives",
-                                    onClick = { selectedTool = "Archives"; sourceFormat = "ZIP"; outputText = ""; outputBytes = null },
-                                    label = { Text("Archives") }
-                                )
-                            }
-
                             var format by remember(selectedTool) {
                                 mutableStateOf(
                                     when (selectedTool) {
@@ -274,13 +256,9 @@ fun HollowToolboxApp() {
                                     }
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Text("FROM FORMAT", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                                    FormatDropdown(
-                                        value = sourceFormat,
-                                        options = inputFormats,
-                                        onSelected = { sourceFormat = it }
-                                    )
-                                    Text(sourceName, color = Muted, fontSize = 10.sp, maxLines = 1)
+                                    Text("INPUT FILE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                    Text(if (sourceUri == null) "Choose a file" else sourceName, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                                    Text(if (sourceUri == null) "Type will be detected automatically" else "Detected: " + detectedFileType, color = Accent, fontSize = 10.sp, maxLines = 1)
                                 }
                             }
 
