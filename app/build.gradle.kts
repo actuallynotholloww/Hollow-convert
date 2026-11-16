@@ -36,3 +36,23 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+// Decode the checked-in launcher artwork into a generated Android drawable.
+// Keeping the source as Base64 lets the GitHub contents API store it losslessly.
+val launcherIconResDir = layout.buildDirectory.dir("generated/res/launcherIcon")
+val generateLauncherIcon by tasks.registering {
+    val encodedIcon = layout.projectDirectory.file("src/main/assets/ic_launcher_image.png.b64")
+    val generatedPng = launcherIconResDir.map { it.file("drawable-nodpi/ic_launcher_image.png") }
+    inputs.file(encodedIcon)
+    outputs.file(generatedPng)
+    doLast {
+        val outputFile = generatedPng.get().asFile
+        outputFile.parentFile.mkdirs()
+        outputFile.writeBytes(java.util.Base64.getDecoder().decode(encodedIcon.asFile.readText().trim()))
+    }
+}
+
+android.sourceSets.getByName("main").res.srcDir(launcherIconResDir)
+tasks.named("preBuild").configure {
+    dependsOn(generateLauncherIcon)
+}
