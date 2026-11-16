@@ -11,7 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -53,7 +55,10 @@ fun HollowConvertApp() {
     var sourceName by remember { mutableStateOf("No file selected") }
     var outputText by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("Choose a file to get started.") }
-    var selectedTool by remember { mutableStateOf("Auto detect") }
+    var selectedTool by remember { mutableStateOf("Text & documents") }
+    var plannedTool by remember { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -88,6 +93,7 @@ fun HollowConvertApp() {
             )
         }) { padding ->
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -131,17 +137,21 @@ fun HollowConvertApp() {
                 item {
                     Text("CONVERSION TOOLS", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ToolRow("Text & documents", "TXT, HTML, JSON, Markdown", Icons.Default.Description) { selectedTool = "Text & documents" }
-                        ToolRow("Images", "PNG, JPG, WebP — coming next", Icons.Default.Image) { selectedTool = "Images" }
-                        ToolRow("Audio", "MP3, WAV, AAC — FFmpeg module planned", Icons.Default.MusicNote) { selectedTool = "Audio" }
-                        ToolRow("Video", "MP4, MOV, WebM — FFmpeg module planned", Icons.Default.VideoLibrary) { selectedTool = "Video" }
+                        ToolRow("Text & documents", "TXT, HTML, JSON, Markdown", Icons.Default.Description) {
+                            selectedTool = "Text & documents"
+                            status = "Text & document tools selected."
+                            scope.launch { listState.animateScrollToItem(3) }
+                        }
+                        ToolRow("Images", "PNG, JPG, WebP — coming next", Icons.Default.Image) { plannedTool = "Images" }
+                        ToolRow("Audio", "MP3, WAV, AAC — FFmpeg module planned", Icons.Default.MusicNote) { plannedTool = "Audio" }
+                        ToolRow("Video", "MP4, MOV, WebM — FFmpeg module planned", Icons.Default.VideoLibrary) { plannedTool = "Video" }
                     }
                 }
                 item {
                     Text("CONVERT", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("Text & document conversions", fontWeight = FontWeight.Bold)
+                            Text(if (selectedTool == "Text & documents") "Text & document conversions" else "$selectedTool conversions", fontWeight = FontWeight.Bold)
                             Text("Choose a supported output format. The first build includes working text conversions.", color = Muted, fontSize = 12.sp)
                             var format by remember { mutableStateOf("TXT") }
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -184,6 +194,22 @@ fun HollowConvertApp() {
                     Text("More formats will be added in future builds. Some formats require dedicated conversion engines.", color = Muted, fontSize = 11.sp)
                 }
             }
+        }
+        plannedTool?.let { tool ->
+            val details = when (tool) {
+                "Images" -> "PNG, JPG, and WebP conversion is not included in this build yet. Image conversion is still under development."
+                "Audio" -> "MP3, WAV, and AAC conversion needs the planned audio conversion engine, which is not included in this build yet."
+                else -> "MP4, MOV, and WebM conversion needs the planned video conversion engine, which is not included in this build yet."
+            }
+            AlertDialog(
+                onDismissRequest = { plannedTool = null },
+                title = { Text("$tool conversion is coming next") },
+                text = { Text(details) },
+                confirmButton = {
+                    TextButton(onClick = { plannedTool = null }) { Text("Got it") }
+                },
+                containerColor = Panel
+            )
         }
     }
 }

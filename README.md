@@ -9,7 +9,7 @@ Hollow Convert is a native Android file-conversion toolbox built with Kotlin and
 - GitHub Actions workflow that builds and uploads a debug APK
 
 ## Build
-The GitHub Actions workflow runs on pushes to `main` and can also be started manually from the Actions tab. Download the `Hollow-Convert-debug` artifact from a successful run.
+The GitHub Actions workflow runs on pushes to `main` and can also be started manually from the Actions tab. Download the `Hollow-Convert-debug-apk` artifact from a successful run.
 
 ## Roadmap
 - Image conversion
