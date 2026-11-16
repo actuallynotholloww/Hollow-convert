@@ -2,13 +2,16 @@ package com.hollowshote.hollowconvert
 
 import android.net.Uri
 import android.os.Bundle
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -141,8 +144,8 @@ fun HollowConvertApp() {
                             Text("Text & document conversions", fontWeight = FontWeight.Bold)
                             Text("Choose a supported output format. The first build includes working text conversions.", color = Muted, fontSize = 12.sp)
                             var format by remember { mutableStateOf("TXT") }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("TXT", "HTML", "JSON", "CSV").forEach { option ->
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE").forEach { option ->
                                     FilterChip(selected = format == option, onClick = { format = option }, label = { Text(option) })
                                 }
                             }
@@ -214,6 +217,9 @@ private fun convertText(input: String, output: String): String = when (output) {
         }
     }
     "CSV" -> jsonToCsv(input)
+    "BASE64" -> Base64.encodeToString(input.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+    "URL ENCODE" -> java.net.URLEncoder.encode(input, "UTF-8")
+    "URL DECODE" -> java.net.URLDecoder.decode(input, "UTF-8")
     else -> input
 }
 
