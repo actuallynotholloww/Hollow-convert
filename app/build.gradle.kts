@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -48,7 +50,7 @@ val generateLauncherIcon by tasks.registering {
     doLast {
         val outputFile = generatedPng.get().asFile
         outputFile.parentFile.mkdirs()
-        outputFile.writeBytes(java.util.Base64.getDecoder().decode(encodedIcon.asFile.readText().trim()))
+        outputFile.writeBytes(Base64.getDecoder().decode(encodedIcon.asFile.readText().trim()))
     }
 }
 
