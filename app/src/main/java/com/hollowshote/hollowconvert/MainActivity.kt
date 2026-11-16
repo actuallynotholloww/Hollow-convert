@@ -434,6 +434,17 @@ fun HollowToolboxApp() {
     }
 }
 
+private fun detectFileType(fileName: String, mimeType: String?): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase()
+    return when {
+        extension == "zip" || mimeType == "application/zip" || mimeType == "application/x-zip-compressed" -> "ZIP archive"
+        mimeType?.startsWith("image/") == true || extension in setOf("png", "jpg", "jpeg", "webp", "bmp", "gif") -> "Image"
+        mimeType?.startsWith("text/") == true || extension in setOf("txt", "text", "html", "htm", "json", "csv", "md", "markdown", "xml", "yaml", "yml", "css", "js", "ts", "kt", "java", "py", "log", "ini", "toml", "properties", "sql") -> "Text document"
+        mimeType?.startsWith("audio/") == true -> "Audio"
+        mimeType?.startsWith("video/") == true -> "Video"
+        else -> "Other file"
+    }
+}
 @Composable
 private fun FormatDropdown(
     value: String,
