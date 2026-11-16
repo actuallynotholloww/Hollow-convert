@@ -71,6 +71,7 @@ fun HollowToolboxApp() {
     var outputMime by remember { mutableStateOf("text/plain") }
     var status by remember { mutableStateOf("Choose a file to get started.") }
     var selectedTool by remember { mutableStateOf("Text & documents") }
+    var sourceFormat by remember { mutableStateOf("Auto detect") }
     var selectedUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var zipAction by remember { mutableStateOf("Create ZIP") }
     var pendingZipUri by remember { mutableStateOf<Uri?>(null) }
@@ -83,7 +84,8 @@ fun HollowToolboxApp() {
     val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             sourceUri = uri
-            sourceName = uri.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
+            sourceName = queryDisplayName(context, uri)
+            sourceFormat = sourceName.substringAfterLast('.', "").uppercase().ifBlank { "Auto detect" }
             outputText = ""
             outputBytes = null
             status = "File ready. Choose a conversion."
@@ -197,84 +199,151 @@ fun HollowToolboxApp() {
                     }
                 } else {
                 item {
-                    Column(
-                        Modifier.fillMaxWidth().background(
-                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                listOf(Color(0xFF29234F), Color(0xFF171B2A))
-                            ), RoundedCornerShape(24.dp)
-                        ).padding(22.dp)
-                    ) {
-                        Text("ONE TOOLBOX.", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black)
-                        Text("A growing hub for file conversion.", color = Muted)
-                        Spacer(Modifier.height(18.dp))
-                        Button(
-                            onClick = { openFile.launch(arrayOf("*/*")) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = Accent)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Select a file", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-                item {
-                    Text("SELECTED FILE", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(16.dp)) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Description, null, tint = Accent)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(sourceName, fontWeight = FontWeight.SemiBold)
-                                Text(if (sourceUri == null) "Waiting for a file" else "Ready to convert", color = Muted, fontSize = 12.sp)
-                            }
-                            if (sourceUri != null) Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF5DD6A0))
-                        }
-                    }
-                }
-                item {
-                    Text("CONVERSION TOOLS", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HomeToolTile("CONVERT", "Text & docs", Icons.Default.Description, selectedTool == "Text & documents") {
-                                selectedTool = "Text & documents"
-                                status = "Text conversion selected."
-                            }
-                            HomeToolTile("IMAGES", "PNG · JPG · WebP", Icons.Default.Image, selectedTool == "Images") {
-                                selectedTool = "Images"
-                                status = "Image conversion selected."
-                            }
-                            HomeToolTile("ARCHIVES", "ZIP tools", Icons.Default.Folder, selectedTool == "Archives") {
-                                selectedTool = "Archives"
-                                status = "Archive tools selected."
-                            }
-                        }
-                    }
-                }
-                item {
                     Text("CONVERT", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(if (selectedTool == "Text & documents") "Text & document conversions" else "$selectedTool conversions", fontWeight = FontWeight.Bold)
-                            Text(if (selectedTool == "Images") "Convert an image between supported formats on your device." else "Choose a supported output format. Text conversions run on your device.", color = Muted, fontSize = 12.sp)
-                            var format by remember(selectedTool) { mutableStateOf(if (selectedTool == "Images") "PNG" else "TXT") }
-                            val formats = if (selectedTool == "Images") listOf("PNG", "JPG", "WEBP") else listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE")
-                            if (selectedTool != "Archives") Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                formats.forEach { option ->
-                                    FilterChip(selected = format == option, onClick = { format = option }, label = { Text(option) })
+                            Text("CONVERT FILES", fontWeight = FontWeight.Black, fontSize = 21.sp)
+                            Text("Choose a file, select its format, then choose what to convert it to.", color = Muted, fontSize = 12.sp)
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                FilterChip(
+                                    selected = selectedTool == "Text & documents",
+                                    onClick = { selectedTool = "Text & documents"; sourceFormat = "Auto detect"; outputText = ""; outputBytes = null },
+                                    label = { Text("Text") }
+                                )
+                                FilterChip(
+                                    selected = selectedTool == "Images",
+                                    onClick = { selectedTool = "Images"; sourceFormat = "Auto detect"; outputText = ""; outputBytes = null },
+                                    label = { Text("Images") }
+                                )
+                                FilterChip(
+                                    selected = selectedTool == "Archives",
+                                    onClick = { selectedTool = "Archives"; sourceFormat = "ZIP"; outputText = ""; outputBytes = null },
+                                    label = { Text("Archives") }
+                                )
+                            }
+
+                            var format by remember(selectedTool) {
+                                mutableStateOf(
+                                    when (selectedTool) {
+                                        "Images" -> "PNG"
+                                        "Archives" -> "Create ZIP"
+                                        else -> "TXT"
+                                    }
+                                )
+                            }
+                            val inputFormats = when (selectedTool) {
+                                "Images" -> listOf("Auto detect", "PNG", "JPG", "WEBP")
+                                "Archives" -> listOf("Any file", "ZIP")
+                                else -> listOf("Auto detect", "TXT", "HTML", "JSON", "CSV")
+                            }
+                            val outputFormats = when (selectedTool) {
+                                "Images" -> listOf("PNG", "JPG", "WEBP")
+                                "Archives" -> listOf("Create ZIP", "Extract ZIP")
+                                else -> listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE")
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Card(
+                                    onClick = {
+                                        if (selectedTool == "Archives" && zipAction == "Create ZIP") {
+                                            openMultipleFiles.launch(arrayOf("*/*"))
+                                        } else {
+                                            val mimeTypes = if (selectedTool == "Images") arrayOf("image/*")
+                                                else if (selectedTool == "Archives") arrayOf("application/zip", "application/x-zip-compressed", "*/*")
+                                                else arrayOf("*/*")
+                                            openFile.launch(mimeTypes)
+                                        }
+                                    },
+                                    modifier = Modifier.size(76.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF272344)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Accent),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Column(
+                                        Modifier.fillMaxSize().padding(5.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.Add, null, tint = Accent, modifier = Modifier.size(27.dp))
+                                        Text("FILE", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    Text("FROM FORMAT", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                    FormatDropdown(
+                                        value = sourceFormat,
+                                        options = inputFormats,
+                                        onSelected = { sourceFormat = it }
+                                    )
+                                    Text(sourceName, color = Muted, fontSize = 10.sp, maxLines = 1)
                                 }
                             }
-                            if (selectedTool == "Archives") {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    FilterChip(selected = zipAction == "Create ZIP", onClick = { zipAction = "Create ZIP" }, label = { Text("Create ZIP") })
-                                    FilterChip(selected = zipAction == "Extract ZIP", onClick = { zipAction = "Extract ZIP" }, label = { Text("Extract ZIP") })
+
+                            Text(
+                                "TO",
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Accent,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Card(
+                                    onClick = {
+                                        if (outputBytes != null || outputText.isNotEmpty()) {
+                                            saveFile.launch("hollow-toolbox-output." + (if (selectedTool == "Archives") "zip" else format.lowercase().replace(" ", "-")))
+                                        } else {
+                                            status = "Convert the file first, then save the output here."
+                                        }
+                                    },
+                                    modifier = Modifier.size(76.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Panel),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF454B60)),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Column(
+                                        Modifier.fillMaxSize().padding(5.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.ArrowForward, null, tint = if (outputBytes != null || outputText.isNotEmpty()) Accent else Muted, modifier = Modifier.size(27.dp))
+                                        Text("OUTPUT", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-                                Text(
-                                    if (zipAction == "Create ZIP") "Bundle several selected files into one compressed archive."
-                                    else "Choose a ZIP file, then select its destination folder.",
-                                    color = Muted,
-                                    fontSize = 11.sp
-                                )
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    Text("TO FORMAT", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                    FormatDropdown(
+                                        value = if (selectedTool == "Archives") zipAction else format,
+                                        options = outputFormats,
+                                        onSelected = {
+                                            if (selectedTool == "Archives") {
+                                                zipAction = it
+                                                format = it
+                                            } else {
+                                                format = it
+                                            }
+                                        }
+                                    )
+                                    Text(
+                                        when (selectedTool) {
+                                            "Images" -> "PNG, JPG or WebP"
+                                            "Archives" -> "ZIP archive"
+                                            else -> "Text and document formats"
+                                        },
+                                        color = Muted,
+                                        fontSize = 10.sp
+                                    )
+                                }
                             }
 
                             Button(
@@ -351,7 +420,10 @@ fun HollowToolboxApp() {
                             }
                             if (outputText.isNotEmpty() || outputBytes != null) {
                                 Text(status, color = Color(0xFF5DD6A0), fontSize = 12.sp)
-                                OutlinedButton(onClick = { saveFile.launch("hollow-convert-output.$outputExtension") }, modifier = Modifier.fillMaxWidth()) {
+                                OutlinedButton(
+                                    onClick = { saveFile.launch("hollow-toolbox-output.$outputExtension") },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
                                     Text("Save converted file")
                                 }
                             }
@@ -381,6 +453,41 @@ fun HollowToolboxApp() {
                 },
                 containerColor = Panel
             )
+        }
+    }
+}
+
+@Composable
+private fun FormatDropdown(
+    value: String,
+    options: List<String>,
+    onSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 11.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(value, modifier = Modifier.weight(1f), maxLines = 1, fontSize = 13.sp)
+            Icon(Icons.Default.ArrowForward, contentDescription = "Choose format", tint = Accent)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Panel).heightIn(max = 320.dp)
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option, color = Color.White) },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
