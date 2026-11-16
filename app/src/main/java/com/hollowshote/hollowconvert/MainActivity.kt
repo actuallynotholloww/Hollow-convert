@@ -205,15 +205,8 @@ fun HollowToolboxApp() {
                             Text("CONVERT FILES", fontWeight = FontWeight.Black, fontSize = 21.sp)
                             Text("Choose a file. Hollow Toolbox detects its type and shows the formats it can convert to.", color = Muted, fontSize = 12.sp)
 
-                            var format by remember(selectedTool) {
-                                mutableStateOf(
-                                    when (selectedTool) {
-                                        "Images" -> "PNG"
-                                        "Archives" -> "EXTRACT ZIP"
-                                        "Other" -> "ZIP"
-                                        else -> "TXT"
-                                    }
-                                )
+                            var format by remember(selectedTool, sourceName) {
+                                mutableStateOf(defaultOutputFormat(selectedTool, sourceName))
                             }
                             val fileExtension = sourceName.substringAfterLast('.', "").lowercase()
                             val outputFormats = if (sourceUri == null) emptyList() else when (selectedTool) {
@@ -307,8 +300,11 @@ fun HollowToolboxApp() {
                                     }
                                     Text(
                                         when (selectedTool) {
-                                            "Images" -> "PNG, JPG or WebP"
-                                            "Archives" -> "ZIP archive"
+                                            "Images" -> "Image formats supported by this device"
+                                            "Archives" -> "Extract the ZIP contents to a folder"
+                                            "Other" -> "Package this file as a ZIP archive"
+                                            "Audio" -> "Audio conversion engine not included yet"
+                                            "Video" -> "Video conversion engine not included yet"
                                             else -> "Text and document formats"
                                         },
                                         color = Muted,
@@ -370,7 +366,7 @@ fun HollowToolboxApp() {
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isBusy,
+                                enabled = !isBusy && sourceUri != null && outputFormats.isNotEmpty(),
                                 colors = ButtonDefaults.buttonColors(containerColor = Accent)
                             ) {
                                 Text(if (selectedTool == "Archives") "Choose folder & extract" else if (selectedTool == "Images") "Convert image" else "Convert file")
@@ -416,6 +412,21 @@ fun HollowToolboxApp() {
     }
 }
 
+private fun defaultOutputFormat(selectedTool: String, fileName: String): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase()
+    return when (selectedTool) {
+        "Archives" -> "EXTRACT ZIP"
+        "Other" -> "ZIP"
+        "Images" -> listOf("PNG", "JPG", "WEBP").firstOrNull {
+            it.lowercase() != extension && !(it == "JPG" && extension == "jpeg")
+        } ?: "PNG"
+        "Audio", "Video" -> ""
+        else -> {
+            val options = listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE")
+            options.firstOrNull { it.lowercase() != extension && !(it == "HTML" && extension == "htm") } ?: "TXT"
+        }
+    }
+}
 private fun detectFileType(fileName: String, mimeType: String?): String {
     val extension = fileName.substringAfterLast('.', "").lowercase()
     return when {
