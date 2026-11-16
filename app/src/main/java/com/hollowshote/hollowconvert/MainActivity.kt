@@ -198,6 +198,7 @@ fun HollowToolboxApp() {
                     }
                 } else {
                 item {
+                    val detectedFileType = detectFileType(sourceName, sourceMime)
                     Text("CONVERT", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                     Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -208,20 +209,23 @@ fun HollowToolboxApp() {
                                 mutableStateOf(
                                     when (selectedTool) {
                                         "Images" -> "PNG"
-                                        "Archives" -> "Create ZIP"
+                                        "Archives" -> "EXTRACT ZIP"
+                                        "Other" -> "ZIP"
                                         else -> "TXT"
                                     }
                                 )
                             }
-                            val inputFormats = when (selectedTool) {
-                                "Images" -> listOf("Auto detect", "PNG", "JPG", "WEBP")
-                                "Archives" -> listOf("Any file", "ZIP")
-                                else -> listOf("Auto detect", "TXT", "HTML", "JSON", "CSV")
-                            }
-                            val outputFormats = when (selectedTool) {
-                                "Images" -> listOf("PNG", "JPG", "WEBP")
-                                "Archives" -> listOf("Create ZIP", "Extract ZIP")
-                                else -> listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE")
+                            val fileExtension = sourceName.substringAfterLast('.', "").lowercase()
+                            val outputFormats = if (sourceUri == null) emptyList() else when (selectedTool) {
+                                "Images" -> listOf("PNG", "JPG", "WEBP").filterNot {
+                                    it.lowercase() == fileExtension || (it == "JPG" && fileExtension == "jpeg")
+                                }
+                                "Archives" -> listOf("EXTRACT ZIP")
+                                "Other" -> listOf("ZIP")
+                                "Audio", "Video" -> emptyList()
+                                else -> listOf("TXT", "HTML", "JSON", "CSV", "BASE64", "URL ENCODE", "URL DECODE").filterNot {
+                                    it.lowercase() == fileExtension || (it == "HTML" && fileExtension == "htm")
+                                }
                             }
 
                             Row(
@@ -231,14 +235,7 @@ fun HollowToolboxApp() {
                             ) {
                                 Card(
                                     onClick = {
-                                        if (selectedTool == "Archives" && zipAction == "Create ZIP") {
-                                            openMultipleFiles.launch(arrayOf("*/*"))
-                                        } else {
-                                            val mimeTypes = if (selectedTool == "Images") arrayOf("image/*")
-                                                else if (selectedTool == "Archives") arrayOf("application/zip", "application/x-zip-compressed", "*/*")
-                                                else arrayOf("*/*")
-                                            openFile.launch(mimeTypes)
-                                        }
+                                        openFile.launch(arrayOf("*/*"))
                                     },
                                     modifier = Modifier.size(76.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color(0xFF272344)),
@@ -299,18 +296,15 @@ fun HollowToolboxApp() {
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                     Text("TO FORMAT", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                                    FormatDropdown(
-                                        value = if (selectedTool == "Archives") zipAction else format,
-                                        options = outputFormats,
-                                        onSelected = {
-                                            if (selectedTool == "Archives") {
-                                                zipAction = it
-                                                format = it
-                                            } else {
-                                                format = it
-                                            }
-                                        }
-                                    )
+                                    if (outputFormats.isNotEmpty()) {
+                                        FormatDropdown(
+                                            value = if (selectedTool == "Archives") "EXTRACT ZIP" else format,
+                                            options = outputFormats,
+                                            onSelected = { format = it }
+                                        )
+                                    } else {
+                                        Text("No compatible output formats yet", color = Muted, fontSize = 12.sp)
+                                    }
                                     Text(
                                         when (selectedTool) {
                                             "Images" -> "PNG, JPG or WebP"
@@ -326,23 +320,7 @@ fun HollowToolboxApp() {
                             Button(
                                 onClick = {
                                     if (selectedTool == "Archives") {
-                                        if (zipAction == "Create ZIP") {
-                                            if (selectedUris.isEmpty()) {
-                                                openMultipleFiles.launch(arrayOf("*/*"))
-                                            } else {
-                                                scope.launch {
-                                                    isBusy = true
-                                                    val result = runCatching { withContext(Dispatchers.IO) { createZip(context, selectedUris) } }
-                                                    result.onSuccess {
-                                                        outputBytes = it
-                                                        outputText = ""
-                                                        outputExtension = "zip"
-                                                        status = "ZIP archive ready. Save it below."
-                                                    }.onFailure { status = "ZIP failed: " + (it.message ?: "Unknown error") }
-                                                    isBusy = false
-                                                }
-                                            }
-                                        } else if (sourceUri == null) {
+                                        if (sourceUri == null) {
                                             status = "Select a ZIP file first."
                                         } else {
                                             pendingZipUri = sourceUri
@@ -354,7 +332,11 @@ fun HollowToolboxApp() {
                                         status = "Select a file first."
                                     } else {
                                         runCatching {
-                                            if (selectedTool == "Images") {
+                                            if (selectedTool == "Other") {
+                                                outputBytes = createZip(context, listOf(uri))
+                                                outputText = ""
+                                                outputExtension = "zip"
+                                            } else if (selectedTool == "Images") {
                                                 val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
                                                     ?: error("This file could not be decoded as an image.")
                                                 val stream = ByteArrayOutputStream()
@@ -391,7 +373,7 @@ fun HollowToolboxApp() {
                                 enabled = !isBusy,
                                 colors = ButtonDefaults.buttonColors(containerColor = Accent)
                             ) {
-                                Text(if (selectedTool == "Archives") if (zipAction == "Create ZIP") "Create archive" else "Extract archive" else if (selectedTool == "Images") "Convert image" else "Convert file")
+                                Text(if (selectedTool == "Archives") "Choose folder & extract" else if (selectedTool == "Images") "Convert image" else "Convert file")
                                 Spacer(Modifier.width(8.dp))
                                 Icon(Icons.Default.ArrowForward, null)
                             }
