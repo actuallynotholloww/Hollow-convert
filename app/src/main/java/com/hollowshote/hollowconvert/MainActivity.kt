@@ -233,8 +233,8 @@ private fun parseCsv(input: String): List<List<String>> {
             ch == ',' && !quoted -> {
                 row.add(cell.toString()); cell.clear()
             }
-            (ch == '\\n' || ch == '\\r') && !quoted -> {
-                if (ch == '\\r' && i + 1 < input.length && input[i + 1] == '\\n') i++
+            (ch == '\n' || ch == '\r') && !quoted -> {
+                if (ch == '\r' && i + 1 < input.length && input[i + 1] == '\n') i++
                 row.add(cell.toString()); cell.clear()
                 if (row.any { it.isNotEmpty() }) rows.add(row)
                 row = mutableListOf()
@@ -264,7 +264,7 @@ private fun csvToJson(input: String): String {
 private fun jsonToCsv(input: String): String {
     val trimmed = input.trim()
     if (!trimmed.startsWith("[")) {
-        return parseCsv(input).joinToString("\\n") { row -> row.joinToString(",") { csvEscape(it) } }
+        return parseCsv(input).joinToString("\n") { row -> row.joinToString(",") { csvEscape(it) } }
     }
     val array = JSONArray(trimmed)
     if (array.length() == 0) return ""
@@ -275,11 +275,11 @@ private fun jsonToCsv(input: String): String {
         val item = array.optJSONObject(i) ?: error("Every JSON array item must be an object.")
         lines.add(headers.joinToString(",") { key -> csvEscape(item.opt(key)?.toString() ?: "") })
     }
-    return lines.joinToString("\\n")
+    return lines.joinToString("\n")
 }
 
 private fun csvEscape(value: String): String =
-    if (value.contains(',') || value.contains('"') || value.contains('\\n') || value.contains('\\r')) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r')) {
         "\"" + value.replace("\"", "\"\"") + "\""
     } else value
 }
