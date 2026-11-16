@@ -142,7 +142,7 @@ fun HollowConvertApp() {
                             Text("Choose a supported output format. The first build includes working text conversions.", color = Muted, fontSize = 12.sp)
                             var format by remember { mutableStateOf("TXT") }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf("TXT", "HTML", "JSON").forEach { option ->
+                                listOf("TXT", "HTML", "JSON", "CSV").forEach { option ->
                                     FilterChip(selected = format == option, onClick = { format = option }, label = { Text(option) })
                                 }
                             }
@@ -209,8 +209,77 @@ private fun convertText(input: String, output: String): String = when (output) {
         when {
             trimmed.startsWith("{") -> JSONObject(trimmed).toString(2)
             trimmed.startsWith("[") -> JSONArray(trimmed).toString(2)
-            else -> JSONObject().put("text", input).toString(2)
+            trimmed.isEmpty() -> "[]"
+            else -> csvToJson(input)
         }
     }
+    "CSV" -> jsonToCsv(input)
     else -> input
+}
+
+private fun parseCsv(input: String): List<List<String>> {
+    val rows = mutableListOf<List<String>>()
+    var row = mutableListOf<String>()
+    val cell = StringBuilder()
+    var quoted = false
+    var i = 0
+    while (i < input.length) {
+        val ch = input[i]
+        when {
+            ch == '"' && quoted && i + 1 < input.length && input[i + 1] == '"' -> {
+                cell.append('"'); i++
+            }
+            ch == '"' -> quoted = !quoted
+            ch == ',' && !quoted -> {
+                row.add(cell.toString()); cell.clear()
+            }
+            (ch == '\\n' || ch == '\\r') && !quoted -> {
+                if (ch == '\\r' && i + 1 < input.length && input[i + 1] == '\\n') i++
+                row.add(cell.toString()); cell.clear()
+                if (row.any { it.isNotEmpty() }) rows.add(row)
+                row = mutableListOf()
+            }
+            else -> cell.append(ch)
+        }
+        i++
+    }
+    row.add(cell.toString())
+    if (row.any { it.isNotEmpty() }) rows.add(row)
+    return rows
+}
+
+private fun csvToJson(input: String): String {
+    val rows = parseCsv(input)
+    if (rows.isEmpty()) return "[]"
+    val headers = rows.first().mapIndexed { index, value -> value.ifBlank { "column_${index + 1}" } }
+    val result = JSONArray()
+    rows.drop(1).forEach { values ->
+        val item = JSONObject()
+        headers.forEachIndexed { index, key -> item.put(key, values.getOrElse(index) { "" }) }
+        result.put(item)
+    }
+    return result.toString(2)
+}
+
+private fun jsonToCsv(input: String): String {
+    val trimmed = input.trim()
+    if (!trimmed.startsWith("[")) {
+        return parseCsv(input).joinToString("\\n") { row -> row.joinToString(",") { csvEscape(it) } }
+    }
+    val array = JSONArray(trimmed)
+    if (array.length() == 0) return ""
+    val first = array.optJSONObject(0) ?: error("CSV export needs a JSON array of objects.")
+    val headers = (0 until first.length()).map { first.names()?.optString(it) ?: "" }
+    val lines = mutableListOf(headers.joinToString(",") { csvEscape(it) })
+    for (i in 0 until array.length()) {
+        val item = array.optJSONObject(i) ?: error("Every JSON array item must be an object.")
+        lines.add(headers.joinToString(",") { key -> csvEscape(item.opt(key)?.toString() ?: "") })
+    }
+    return lines.joinToString("\\n")
+}
+
+private fun csvEscape(value: String): String =
+    if (value.contains(',') || value.contains('"') || value.contains('\\n') || value.contains('\\r')) {
+        "\"" + value.replace("\"", "\"\"") + "\""
+    } else value
 }
