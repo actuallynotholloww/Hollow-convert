@@ -14,8 +14,8 @@ android {
         applicationId = "com.hollowshote.hollowconvert"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildFeatures { compose = true }
@@ -36,6 +36,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
 
