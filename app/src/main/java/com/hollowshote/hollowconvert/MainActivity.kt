@@ -27,6 +27,7 @@ import java.util.zip.ZipOutputStream
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
@@ -74,6 +75,7 @@ fun HollowToolboxApp() {
     var zipAction by remember { mutableStateOf("Create ZIP") }
     var pendingZipUri by remember { mutableStateOf<Uri?>(null) }
     var isBusy by remember { mutableStateOf(false) }
+    var showConverter by remember { mutableStateOf(false) }
     var plannedTool by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -133,6 +135,13 @@ fun HollowToolboxApp() {
     )) {
         Scaffold(containerColor = Ink, topBar = {
             TopAppBar(
+                navigationIcon = {
+                    if (showConverter) {
+                        IconButton(onClick = { showConverter = false }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back to home", tint = Color.White)
+                        }
+                    }
+                },
                 title = {
                     Column {
                         Text("HOLLOW TOOLBOX", fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
@@ -148,6 +157,45 @@ fun HollowToolboxApp() {
                 contentPadding = PaddingValues(18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                if (!showConverter) {
+                    item {
+                        Column(
+                            Modifier.fillMaxWidth().padding(top = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(18.dp)
+                        ) {
+                            Text("WELCOME TO HOLLOW TOOLBOX", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+                            Text("What do you want to do?", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black)
+                            Text("Your all-in-one space for file tools.", color = Muted, fontSize = 14.sp)
+                            Card(
+                                onClick = {
+                                    showConverter = true
+                                    scope.launch { listState.scrollToItem(0) }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(174.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF272344)),
+                                shape = RoundedCornerShape(22.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Accent)
+                            ) {
+                                Row(
+                                    Modifier.fillMaxSize().padding(20.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                        Text("CONVERT FILES", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                                        Text("Open the file converter and choose what to convert.", color = Muted, fontSize = 12.sp)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("OPEN CONVERTER", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Spacer(Modifier.width(7.dp))
+                                            Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Accent)
+                                        }
+                                    }
+                                    Icon(Icons.Default.Description, contentDescription = null, tint = Accent, modifier = Modifier.size(48.dp))
+                                }
+                            }
+                        }
+                    }
+                } else {
                 item {
                     Column(
                         Modifier.fillMaxWidth().background(
@@ -314,6 +362,7 @@ fun HollowToolboxApp() {
                     if (isBusy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Accent)
                     Text(status, color = Muted, fontSize = 11.sp)
                     Text("Audio/video transcoding and specialist 3D or game-asset conversion need additional engines and are not included yet.", color = Muted, fontSize = 10.sp)
+                }
                 }
             }
         }
